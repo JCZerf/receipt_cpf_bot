@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 from patchright.async_api import Frame, Page
 
@@ -43,6 +44,20 @@ async def _is_verified(checkbox_frame: Frame) -> bool:
     return state == "true"
 
 
+async def _wait_for_challenge_or_verification(
+    page: Page, checkbox_frame: Frame, timeout_ms: int = 20_000
+) -> Frame | None:
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        if await _is_verified(checkbox_frame):
+            return None
+        try:
+            return await wait_for_ready_challenge(page, timeout_ms=1_000)
+        except TimeoutError:
+            continue
+    raise CaptchaNotVerified("neither a challenge nor a verification appeared")
+
+
 async def auto_solver(page: Page) -> None:
     checkbox_frame = await wait_for_checkbox(page)
     await checkbox_frame.locator("#checkbox").click()
@@ -51,11 +66,10 @@ async def auto_solver(page: Page) -> None:
     rate_limit_hits = 0
 
     while round_num < MAX_ROUNDS:
-        if await _is_verified(checkbox_frame):
+        frame = await _wait_for_challenge_or_verification(page, checkbox_frame)
+        if frame is None:
             logger.info("captcha verified after %d round(s)", round_num)
             return
-
-        frame = await wait_for_ready_challenge(page)
 
         instruction = await read_instruction(frame)
         urls = await read_image_urls(frame)
