@@ -5,7 +5,7 @@ hCaptcha da página automaticamente. Expõe a consulta por CLI e por API HTTP.
 
 ## Arquitetura
 
-Três camadas, com dependência em uma direção só — `api` → `bot` → `core`:
+Três camadas, com dependência em uma direção só: `api` → `bot` → `core`.
 
 ```
 api/     camada externa de comunicação (HTTP)
@@ -29,7 +29,7 @@ core/    infraestrutura compartilhada pelas duas camadas
 ```
 
 A `api` nunca é importada pelo `bot`. O solver de captcha é um serviço externo, acessado por
-HTTP — trocá-lo não exige mexer no bot.
+HTTP, então trocá-lo não exige mexer no bot.
 
 ## Requisitos
 
@@ -48,9 +48,9 @@ cp .env.example .env
 
 | Variável | Obrigatória | Padrão | Descrição |
 | --- | --- | --- | --- |
-| `SOLVER_URL` | sim | — | URL base do solver de hCaptcha |
-| `SOLVER_API_KEY` | sim | — | Credencial enviada ao solver |
-| `API_KEY` | sim | — | Credencial exigida de quem chama esta API |
+| `SOLVER_URL` | sim | | URL base do solver de hCaptcha |
+| `SOLVER_API_KEY` | sim | | Credencial enviada ao solver |
+| `API_KEY` | sim | | Credencial exigida de quem chama esta API |
 | `SOLVER_PATH` | não | `/api/v1/recognition/hcaptcha` | Caminho do endpoint de reconhecimento |
 | `SOLVER_TIMEOUT_SECONDS` | não | `30` | Timeout de cada chamada ao solver |
 | `HEADLESS` | não | `true` | Roda o Chrome sem janela |
@@ -58,7 +58,7 @@ cp .env.example .env
 | `PROJECT_NAME` | não | `receipt_cpf_bot` | Título exibido na documentação da API |
 
 As três obrigatórias não têm padrão de propósito: sem elas o processo falha na inicialização,
-em vez de errar depois com uma mensagem de rede confusa — ou, no caso de `API_KEY`, de subir
+em vez de errar depois com uma mensagem de rede confusa, ou, no caso de `API_KEY`, de subir
 uma API aberta por engano. O `.env` não é versionado.
 
 Gere a `API_KEY` com:
@@ -125,7 +125,7 @@ Quando o captcha não é resolvido dentro do limite de rodadas, a API responde `
 ## Renderização e deploy em servidor
 
 A Receita valida o token do hCaptcha e rejeita a consulta quando o WebGL é servido pelo
-**SwiftShader**, o renderizador de software embutido no Chrome — ele não aparece em máquina
+**SwiftShader**, o renderizador de software embutido no Chrome. Ele não aparece em máquina
 de usuário real e denuncia automação. A mensagem nesse caso é
 `O Anti-Robô não foi preenchido corretamente`, mesmo com o captcha resolvido.
 
@@ -150,7 +150,7 @@ O host precisa dos pacotes `xvfb` e `libgl1-mesa-dri` (o driver de software do M
 Os ajustes que sustentam isso estão em `bot/browser/fingerprint.py`:
 
 - `GL_ARGS`, aplicado nos dois modos, escolhe ANGLE sobre GL do sistema e desativa a
-  blocklist de GPU — sem `--ignore-gpu-blocklist` o Chrome recusa o llvmpipe e volta ao
+  blocklist de GPU: sem `--ignore-gpu-blocklist` o Chrome recusa o llvmpipe e volta ao
   SwiftShader
 - User-Agent derivado da versão do binário do Chrome em tempo de execução, removendo o
   marcador `HeadlessChrome`. É derivado, e não fixo, para não divergir do header
