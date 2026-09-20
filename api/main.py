@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 
+from api.config import settings
 from api.router import api_router
-from bot.core.config import settings
-from bot.core.logging_config import configure_logging
+from core.logging_config import configure_logging
 
 configure_logging()
 

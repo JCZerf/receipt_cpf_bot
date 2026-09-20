@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas import CpfLookupRequest, CpfLookupResponse
+from api.security import require_api_key
 from bot.captcha.solver import CaptchaNotVerified
 from bot.query import lookup_cpf
 
-router = APIRouter(prefix="/cpf", tags=["cpf"])
+router = APIRouter(prefix="/cpf", tags=["cpf"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("", response_model=CpfLookupResponse)

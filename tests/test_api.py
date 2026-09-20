@@ -1,10 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from api.config import settings
 from api.main import app
 from api.routes import cpf as cpf_route
+from api.security import API_KEY_HEADER
 from bot.captcha.solver import CaptchaNotVerified
-from bot.core.config import settings
 from bot.models import CpfData, CpfQueryResult
 
 BASE = settings.API_V1_STR
@@ -12,7 +13,7 @@ BASE = settings.API_V1_STR
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    return TestClient(app, headers={API_KEY_HEADER: settings.API_KEY})
 
 
 def test_health(client):

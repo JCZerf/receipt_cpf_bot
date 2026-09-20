@@ -2,7 +2,7 @@ import base64
 
 import httpx
 
-from bot.core.config import settings
+from bot.config import settings
 
 REQUEST_TYPE = "image_label_binary"
 
@@ -25,7 +25,7 @@ async def recognize(
             ],
         }
     }
-    url = f"{settings.SOLVER_URL}{settings.API_V1_STR}/recognition/hcaptcha"
+    url = f"{settings.SOLVER_URL.rstrip('/')}{settings.SOLVER_PATH}"
     headers = {"Authorization": f"Basic {settings.SOLVER_API_KEY}"}
     async with httpx.AsyncClient(timeout=settings.SOLVER_TIMEOUT_SECONDS) as client:
         response = await client.post(url, json=payload, headers=headers)

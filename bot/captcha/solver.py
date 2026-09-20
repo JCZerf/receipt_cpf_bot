@@ -20,9 +20,22 @@ logger = logging.getLogger(__name__)
 MAX_ROUNDS = 20
 MIN_TARGETS_TO_SUBMIT = 2
 
+RATE_LIMIT_STATUS = 429
+MAX_RATE_LIMIT_RETRIES = 6
+BASE_BACKOFF_SECONDS = 5.0
+MAX_BACKOFF_SECONDS = 120.0
+
 
 class CaptchaNotVerified(Exception):
     pass
+
+
+class CaptchaRateLimited(CaptchaNotVerified):
+    pass
+
+
+def backoff_delay(attempt: int) -> float:
+    return min(BASE_BACKOFF_SECONDS * 2 ** (attempt - 1), MAX_BACKOFF_SECONDS)
 
 
 async def _is_verified(checkbox_frame: Frame) -> bool:
@@ -34,17 +47,41 @@ async def auto_solver(page: Page) -> None:
     checkbox_frame = await wait_for_checkbox(page)
     await checkbox_frame.locator("#checkbox").click()
 
-    for round_num in range(1, MAX_ROUNDS + 1):
+    round_num = 0
+    rate_limit_hits = 0
+
+    while round_num < MAX_ROUNDS:
         if await _is_verified(checkbox_frame):
-            logger.info("captcha verified after %d round(s)", round_num - 1)
+            logger.info("captcha verified after %d round(s)", round_num)
             return
 
         frame = await wait_for_ready_challenge(page)
+
         instruction = await read_instruction(frame)
         urls = await read_image_urls(frame)
 
         responses = await asyncio.gather(*(page.context.request.get(url) for url in urls))
         bodies = await asyncio.gather(*(response.body() for response in responses))
+
+        if any(response.status == RATE_LIMIT_STATUS for response in responses):
+            rate_limit_hits += 1
+            if rate_limit_hits > MAX_RATE_LIMIT_RETRIES:
+                raise CaptchaRateLimited(
+                    f"hCaptcha image CDN still rate limiting after {MAX_RATE_LIMIT_RETRIES} retries"
+                )
+            delay = backoff_delay(rate_limit_hits)
+            logger.warning(
+                "hCaptcha image CDN returned %d, backing off %.0fs (retry %d/%d)",
+                RATE_LIMIT_STATUS,
+                delay,
+                rate_limit_hits,
+                MAX_RATE_LIMIT_RETRIES,
+            )
+            await asyncio.sleep(delay)
+            continue
+
+        rate_limit_hits = 0
+        round_num += 1
 
         if not all(is_valid_jpeg(body) for body in bodies):
             logger.info("round %d served a broken image, asking for another challenge", round_num)
