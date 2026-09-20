@@ -1,4 +1,4 @@
-from bot.extract import extract_result
+from bot.lookup.extract import extract_result
 
 SUCCESS_HTML = """
 <html><body>

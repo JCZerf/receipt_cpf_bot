@@ -3,7 +3,7 @@ from pathlib import Path
 
 from patchright.async_api import async_playwright
 
-PROFILE_DIR = Path(__file__).parent.parent / ".chrome-profile"
+PROFILE_DIR = Path(__file__).parent.parent.parent / ".chrome-profile"
 
 
 @asynccontextmanager

@@ -1,4 +1,4 @@
-from bot.hcaptcha import (
+from bot.browser.hcaptcha import (
     crop_box_for_frame,
     frame_index,
     is_valid_jpeg,

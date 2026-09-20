@@ -3,15 +3,17 @@ import logging
 
 from patchright.async_api import Frame, Page
 
-from bot.hcaptcha import (
+from bot.browser.hcaptcha import (
     click_task,
+    is_valid_jpeg,
     read_image_urls,
     read_instruction,
+    request_new_challenge,
     submit_challenge,
     wait_for_checkbox,
     wait_for_ready_challenge,
 )
-from bot.solver_client import recognize
+from bot.captcha.client import recognize
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,11 @@ async def auto_solver(page: Page) -> None:
 
         responses = await asyncio.gather(*(page.context.request.get(url) for url in urls))
         bodies = await asyncio.gather(*(response.body() for response in responses))
+
+        if not all(is_valid_jpeg(body) for body in bodies):
+            logger.info("round %d served a broken image, asking for another challenge", round_num)
+            await request_new_challenge(page, frame)
+            continue
 
         selections = await recognize(instruction, bodies)
         targets = [i for i, selected in enumerate(selections, start=1) if selected]

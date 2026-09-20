@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from bot.captcha import CaptchaNotVerified
-from bot.models import CpfLookupRequest, CpfLookupResponse
+from api.schemas import CpfLookupRequest, CpfLookupResponse
+from bot.captcha.solver import CaptchaNotVerified
 from bot.query import lookup_cpf
 
 router = APIRouter(prefix="/cpf", tags=["cpf"])

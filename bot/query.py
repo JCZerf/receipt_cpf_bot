@@ -1,8 +1,8 @@
-from bot.browser import open_page
-from bot.captcha import auto_solver
+from bot.browser.session import open_page
+from bot.captcha.solver import auto_solver
 from bot.core.config import settings
-from bot.extract import extract_result
-from bot.fetch import fetch_result_html
+from bot.lookup.extract import extract_result
+from bot.lookup.fetch import fetch_result_html
 from bot.models import CpfQuery, CpfQueryResult
 
 
