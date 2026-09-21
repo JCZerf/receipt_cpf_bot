@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from patchright.async_api import async_playwright
 
@@ -11,8 +10,15 @@ from bot.browser.fingerprint import (
     browser_args,
     chrome_user_agent,
 )
+from bot.config import settings
 
-PROFILE_DIR = Path(__file__).parent.parent.parent / ".chrome-profile"
+PROFILE_DIR = settings.CHROME_PROFILE_DIR
+
+
+def browser_binary() -> dict:
+    if settings.CHROME_EXECUTABLE:
+        return {"executable_path": settings.CHROME_EXECUTABLE}
+    return {"channel": "chrome"}
 
 
 def context_options(headless: bool) -> dict:
@@ -31,8 +37,8 @@ async def open_page(headless: bool = False):
     async with async_playwright() as pw:
         context = await pw.chromium.launch_persistent_context(
             PROFILE_DIR,
-            channel="chrome",
             headless=headless,
+            **browser_binary(),
             **context_options(headless),
         )
         page = context.pages[0] if context.pages else await context.new_page()

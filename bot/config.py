@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +8,8 @@ class BotSettings(BaseSettings):
 
     SOLVER_URL: str
     SOLVER_API_KEY: str
+    CHROME_PROFILE_DIR: Path = Path(__file__).parent.parent / ".chrome-profile"
+    CHROME_EXECUTABLE: str = ""
     SOLVER_PATH: str = "/api/v1/recognition/hcaptcha"
     SOLVER_TIMEOUT_SECONDS: float = 30.0
     HEADLESS: bool = True

@@ -4,6 +4,8 @@ import shutil
 import subprocess
 from functools import lru_cache
 
+from bot.config import settings
+
 CHROME_CANDIDATES = ("google-chrome", "google-chrome-stable", "chrome", "chromium")
 CHROME_FALLBACK_PATH = "/opt/google/chrome/chrome"
 VERSION_PATTERN = re.compile(r"(\d+)\.\d+\.\d+\.\d+")
@@ -31,6 +33,8 @@ GL_ARGS = [
 
 
 def chrome_executable() -> str | None:
+    if settings.CHROME_EXECUTABLE:
+        return settings.CHROME_EXECUTABLE
     for name in CHROME_CANDIDATES:
         path = shutil.which(name)
         if path:
