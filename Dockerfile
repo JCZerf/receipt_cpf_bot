@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    CHROME_PROFILE_DIR=/data/chrome-profile \
+    CHROME_PROFILE_ROOT=/data/chrome-profiles \
     CHROME_EXECUTABLE=/opt/chrome/chrome
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -40,7 +40,7 @@ COPY bot ./bot
 COPY core ./core
 COPY docker-entrypoint.sh ./
 
-RUN chmod +x docker-entrypoint.sh && mkdir -p /data/chrome-profile
+RUN chmod +x docker-entrypoint.sh && mkdir -p /data/chrome-profiles
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PORT=8000

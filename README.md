@@ -57,7 +57,7 @@ cp .env.example .env
 | `SOLVER_TIMEOUT_SECONDS` | não | `30` | Timeout de cada chamada ao solver |
 | `HEADLESS` | não | `true` | Roda o Chrome sem janela |
 | `CHROME_EXECUTABLE` | não | (canal `chrome` do sistema) | Caminho de um binário específico do Chrome |
-| `CHROME_PROFILE_DIR` | não | `.chrome-profile` | Diretório do perfil do Chrome |
+| `CHROME_PROFILE_ROOT` | não | temp do sistema | Onde os perfis efêmeros do Chrome são criados |
 | `API_V1_STR` | não | `/api/v1` | Prefixo das rotas da API |
 | `PROJECT_NAME` | não | `receipt_cpf_bot` | Título exibido na documentação da API |
 

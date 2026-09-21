@@ -1,4 +1,8 @@
-from contextlib import asynccontextmanager
+import shutil
+import tempfile
+from collections.abc import Iterator
+from contextlib import asynccontextmanager, contextmanager
+from pathlib import Path
 
 from patchright.async_api import async_playwright
 
@@ -12,7 +16,7 @@ from bot.browser.fingerprint import (
 )
 from bot.config import settings
 
-PROFILE_DIR = settings.CHROME_PROFILE_DIR
+PROFILE_PREFIX = "session-"
 
 
 def browser_binary() -> dict:
@@ -32,17 +36,28 @@ def context_options(headless: bool) -> dict:
     return {**options, "viewport": VIEWPORT, "screen": SCREEN}
 
 
+@contextmanager
+def session_profile() -> Iterator[Path]:
+    settings.CHROME_PROFILE_ROOT.mkdir(parents=True, exist_ok=True)
+    profile = Path(tempfile.mkdtemp(prefix=PROFILE_PREFIX, dir=settings.CHROME_PROFILE_ROOT))
+    try:
+        yield profile
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+
+
 @asynccontextmanager
 async def open_page(headless: bool = False):
-    async with async_playwright() as pw:
-        context = await pw.chromium.launch_persistent_context(
-            PROFILE_DIR,
-            headless=headless,
-            **browser_binary(),
-            **context_options(headless),
-        )
-        page = context.pages[0] if context.pages else await context.new_page()
-        try:
-            yield page
-        finally:
-            await context.close()
+    with session_profile() as profile:
+        async with async_playwright() as pw:
+            context = await pw.chromium.launch_persistent_context(
+                profile,
+                headless=headless,
+                **browser_binary(),
+                **context_options(headless),
+            )
+            page = context.pages[0] if context.pages else await context.new_page()
+            try:
+                yield page
+            finally:
+                await context.close()
