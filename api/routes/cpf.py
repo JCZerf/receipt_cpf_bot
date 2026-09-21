@@ -1,17 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Request
 
-from api.schemas import CpfLookupRequest, CpfLookupResponse
-from api.security import require_api_key
-from bot.captcha.solver import CaptchaNotVerified
-from bot.query import lookup_cpf
+from api.core.rate_limit import limiter
+from api.dependencies.auth import verify_api_key
+from api.models.cpf import CpfQueryRequest, CpfQueryResponse
+from api.services.cpf_service import fetch_cpf_data
 
-router = APIRouter(prefix="/cpf", tags=["cpf"], dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/cpf", tags=["cpf"], dependencies=[Depends(verify_api_key)])
 
 
-@router.post("", response_model=CpfLookupResponse)
-async def query_cpf(request: CpfLookupRequest) -> CpfLookupResponse:
-    try:
-        result = await lookup_cpf(request.cpf, request.birth_date)
-    except CaptchaNotVerified as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from None
-    return CpfLookupResponse.from_result(result)
+@router.post("", response_model=CpfQueryResponse)
+@limiter.limit("30/minute")
+async def query_cpf(request: Request, payload: CpfQueryRequest) -> CpfQueryResponse:
+    return await fetch_cpf_data(payload)

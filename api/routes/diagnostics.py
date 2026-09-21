@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
-from api.schemas import DiagnosticsResponse
-from api.security import require_api_key
+from api.core.rate_limit import limiter
+from api.dependencies.auth import verify_api_key
+from api.models.diagnostics import DiagnosticsResponse
 from bot.diagnostics import collect_diagnostics
 
 router = APIRouter(
     prefix="/diagnostics",
-    tags=["diagnostics"],
-    dependencies=[Depends(require_api_key)],
+    tags=["observability"],
+    dependencies=[Depends(verify_api_key)],
 )
 
 
 @router.get("", response_model=DiagnosticsResponse)
-async def diagnostics() -> DiagnosticsResponse:
+@limiter.limit("6/minute")
+async def diagnostics(request: Request) -> DiagnosticsResponse:
     return DiagnosticsResponse(**await collect_diagnostics())

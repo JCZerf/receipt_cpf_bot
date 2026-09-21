@@ -1,57 +1,56 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from api.config import settings
+from api.core.settings import settings
+from api.dependencies.auth import API_KEY_HEADER
 from api.main import app
-from api.routes import cpf as cpf_route
-from api.security import API_KEY_HEADER
-from bot.models import CpfQueryResult
+from api.services import cpf_service
 
 BASE = settings.API_V1_STR
 PAYLOAD = {"cpf": "11111111111", "birth_date": "01011990"}
+PROTECTED = [
+    ("post", f"{BASE}/cpf"),
+    ("get", f"{BASE}/metrics"),
+    ("get", f"{BASE}/health/deep"),
+    ("get", f"{BASE}/diagnostics"),
+]
 
 
 @pytest.fixture
 def client(monkeypatch):
-    async def fake_lookup(cpf, birth_date):
-        raise AssertionError("a consulta nao deve ser executada sem autenticacao valida")
+    async def fail(cpf, birth_date):
+        raise AssertionError("a consulta nao deve rodar sem autenticacao valida")
 
-    monkeypatch.setattr(cpf_route, "lookup_cpf", fake_lookup)
+    monkeypatch.setattr(cpf_service, "lookup_cpf", fail)
     return TestClient(app)
 
 
-def test_lookup_without_key_is_rejected(client):
+def call(client, method, path, headers=None):
+    kwargs = {"headers": headers} if headers else {}
+    if method == "post":
+        kwargs["json"] = PAYLOAD
+    return getattr(client, method)(path, **kwargs)
+
+
+@pytest.mark.parametrize("method,path", PROTECTED)
+def test_protected_routes_reject_missing_key(client, method, path):
+    assert call(client, method, path).status_code == 401
+
+
+@pytest.mark.parametrize("method,path", PROTECTED)
+def test_protected_routes_reject_wrong_key(client, method, path):
+    assert call(client, method, path, {API_KEY_HEADER: "errada"}).status_code == 401
+
+
+def test_rejection_uses_the_shared_error_shape(client):
     response = client.post(f"{BASE}/cpf", json=PAYLOAD)
-    assert response.status_code == 401
-
-
-def test_lookup_with_wrong_key_is_rejected(client):
-    response = client.post(f"{BASE}/cpf", json=PAYLOAD, headers={API_KEY_HEADER: "errada"})
-    assert response.status_code == 401
-
-
-def test_lookup_with_empty_key_is_rejected(client):
-    response = client.post(f"{BASE}/cpf", json=PAYLOAD, headers={API_KEY_HEADER: ""})
-    assert response.status_code == 401
+    assert response.json() == {"detail": {"message": "API key invalida"}}
 
 
 def test_auth_runs_before_payload_validation(client):
     response = client.post(f"{BASE}/cpf", json={"cpf": "x"}, headers={API_KEY_HEADER: "errada"})
-    assert response.status_code == 401, (
-        "payload invalido nao deve revelar 422 a quem nao autenticou"
-    )
+    assert response.status_code == 401, "payload invalido nao deve vazar 422 a quem nao autenticou"
 
 
 def test_health_stays_open_for_probes(client):
     assert client.get(f"{BASE}/health").status_code == 200
-
-
-def test_lookup_with_correct_key_passes_auth(client, monkeypatch):
-    async def fake_lookup(cpf, birth_date):
-        return CpfQueryResult(success=False, message="ok", raw_html="")
-
-    monkeypatch.setattr(cpf_route, "lookup_cpf", fake_lookup)
-
-    response = client.post(f"{BASE}/cpf", json=PAYLOAD, headers={API_KEY_HEADER: settings.API_KEY})
-
-    assert response.status_code == 200

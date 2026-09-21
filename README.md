@@ -9,11 +9,13 @@ Três camadas, com dependência em uma direção só: `api` → `bot` → `core`
 
 ```
 api/     camada externa de comunicação (HTTP)
-  main.py      aplicação FastAPI
-  router.py    agregação das rotas
-  routes/      cpf, health
-  schemas.py   contrato HTTP (Pydantic)
-  config.py    PROJECT_NAME, API_V1_STR
+  main.py        aplicação FastAPI
+  router.py      agregação das rotas
+  routes/        cpf, health, metrics, diagnostics
+  models/        contrato HTTP (Pydantic)
+  services/      orquestra a consulta, métricas e mapeamento de erros
+  dependencies/  autenticação por API key
+  core/          settings, rate limit, métricas, handlers de erro
 
 bot/     automação do navegador e da consulta
   query.py     orquestra a consulta ponta a ponta
@@ -105,24 +107,49 @@ Resposta:
 
 ```json
 {
-  "success": true,
-  "message": "query completed",
-  "record": {
-    "cpf": "123.456.789-01",
-    "name": "FULANO DE TAL",
-    "birth_date": "07/08/1978",
-    "status": "REGULAR",
-    "registration_date": "13/11/1996",
-    "check_digit": "00",
-    "issued_at": "20:12:38 do dia 20/09/2026 (hora e data de Brasília).",
-    "control_code": "7E48.F960.CBDF.90C2"
+  "metadata": {
+    "request_id": "b3153446",
+    "timestamp": "2026-09-21T00:56:51.112943Z",
+    "source_data": {
+      "source": "Receita Federal",
+      "source_url": "https://servicos.receita.fazenda.gov.br/servicos/cpf/consultasituacao/ConsultaPublica.asp",
+      "fields": [
+        { "name": "cpf", "origin": "html", "value": "850.429.351-34" },
+        { "name": "name", "origin": "html", "value": "FULANO DE TAL" },
+        { "name": "status", "origin": "html", "value": "REGULAR" }
+      ]
+    }
   }
 }
 ```
 
-Documentação interativa em `/docs`. Health check em `/api/v1/health`.
+Cada campo carrega sua origem, e não só o valor: a consulta é uma extração de uma fonte
+externa, então quem consome precisa saber de onde cada dado veio. A origem sai da propria
+definicao do dominio, em `bot/models.py`.
 
-Quando o captcha não é resolvido dentro do limite de rodadas, a API responde `503`.
+## Rotas
+
+| Rota | Auth | Descrição |
+| --- | --- | --- |
+| `POST /api/v1/cpf` | sim | Consulta a situação cadastral |
+| `GET /api/v1/health` | não | Liveness, para probe da plataforma |
+| `GET /api/v1/health/deep` | sim | Verifica se a Receita e o solver respondem |
+| `GET /api/v1/metrics` | sim | Métricas Prometheus |
+| `GET /api/v1/diagnostics` | sim | Sobe o navegador e reporta o ambiente que ele vê |
+
+As rotas autenticadas exigem o header `X-API-Key` e respondem `401` sem ele. O limite é de
+30 requisições por minuto, contadas por chave de API (6/min em `/diagnostics`, que sobe um
+navegador a cada chamada).
+
+Erros seguem o formato `{"detail": {"source": ..., "message": ...}}`:
+
+| Status | Quando |
+| --- | --- |
+| `404` | CPF não consta na base da Receita |
+| `422` | Payload inválido, ou data de nascimento que não bate com o CPF |
+| `502` | Captcha rejeitado, ou resposta da Receita não reconhecida |
+| `503` | CDN do hCaptcha limitando as requisições |
+
 
 ## Renderização e deploy em servidor
 

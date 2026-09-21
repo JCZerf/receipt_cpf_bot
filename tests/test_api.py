@@ -1,19 +1,40 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from api.config import settings
+from api.core.settings import settings
+from api.dependencies.auth import API_KEY_HEADER
 from api.main import app
-from api.routes import cpf as cpf_route
-from api.security import API_KEY_HEADER
-from bot.captcha.solver import CaptchaNotVerified
+from api.services import cpf_service
+from bot.captcha.solver import CaptchaNotVerified, CaptchaRateLimited
 from bot.models import CpfData, CpfQueryResult
 
 BASE = settings.API_V1_STR
+PAYLOAD = {"cpf": "11111111111", "birth_date": "01011990"}
+
+RECORD = CpfData(
+    cpf="111.111.111-11",
+    name="Fulano de Tal",
+    birth_date="01/01/1990",
+    status="REGULAR",
+    registration_date="01/01/2000",
+    check_digit="11",
+)
 
 
 @pytest.fixture
 def client():
     return TestClient(app, headers={API_KEY_HEADER: settings.API_KEY})
+
+
+def patch_lookup(monkeypatch, result=None, error=None, spy=None):
+    async def fake_lookup(cpf, birth_date):
+        if spy is not None:
+            spy.update(cpf=cpf, birth_date=birth_date)
+        if error is not None:
+            raise error
+        return result
+
+    monkeypatch.setattr(cpf_service, "lookup_cpf", fake_lookup)
 
 
 def test_health(client):
@@ -22,76 +43,92 @@ def test_health(client):
     assert response.json() == {"status": "ok"}
 
 
-def test_cpf_lookup_success(client, monkeypatch):
-    record = CpfData(
-        cpf="111.111.111-11",
-        name="Fulano de Tal",
-        birth_date="01/01/1990",
-        status="REGULAR",
-        registration_date="01/01/2000",
-        check_digit="11",
+def test_successful_query_returns_metadata_envelope(client, monkeypatch):
+    patch_lookup(
+        monkeypatch,
+        result=CpfQueryResult(success=True, message="ok", raw_html="", record=RECORD),
     )
 
-    async def fake_lookup(cpf, birth_date):
-        assert (cpf, birth_date) == ("11111111111", "01011990")
-        return CpfQueryResult(success=True, message="query completed", raw_html="", record=record)
+    body = client.post(f"{BASE}/cpf", json=PAYLOAD).json()
 
-    monkeypatch.setattr(cpf_route, "lookup_cpf", fake_lookup)
-
-    response = client.post(f"{BASE}/cpf", json={"cpf": "11111111111", "birth_date": "01011990"})
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["success"] is True
-    assert body["record"]["name"] == "Fulano de Tal"
-    assert body["record"]["status"] == "REGULAR"
+    metadata = body["metadata"]
+    assert len(metadata["request_id"]) == 8
+    assert metadata["timestamp"]
+    assert metadata["source_data"]["source"] == "Receita Federal"
+    assert metadata["source_data"]["source_url"].startswith("https://")
 
 
-def test_cpf_lookup_without_record(client, monkeypatch):
-    async def fake_lookup(cpf, birth_date):
-        return CpfQueryResult(success=False, message="CPF não encontrado", raw_html="")
+def test_fields_carry_name_origin_and_value(client, monkeypatch):
+    patch_lookup(
+        monkeypatch,
+        result=CpfQueryResult(success=True, message="ok", raw_html="", record=RECORD),
+    )
 
-    monkeypatch.setattr(cpf_route, "lookup_cpf", fake_lookup)
+    fields = client.post(f"{BASE}/cpf", json=PAYLOAD).json()["metadata"]["source_data"]["fields"]
+    by_name = {field["name"]: field for field in fields}
 
-    response = client.post(f"{BASE}/cpf", json={"cpf": "11111111111", "birth_date": "01011990"})
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "success": False,
-        "message": "CPF não encontrado",
-        "record": None,
-    }
+    assert by_name["name"] == {"name": "name", "origin": "html", "value": "Fulano de Tal"}
+    assert by_name["status"]["value"] == "REGULAR"
+    assert by_name["issued_at"]["value"] is None
 
 
-def test_cpf_lookup_captcha_failure_returns_503(client, monkeypatch):
-    async def fake_lookup(cpf, birth_date):
-        raise CaptchaNotVerified("hCaptcha not verified after 20 rounds")
+def test_masked_input_reaches_the_bot_as_digits(client, monkeypatch):
+    spy: dict[str, str] = {}
+    patch_lookup(
+        monkeypatch,
+        result=CpfQueryResult(success=True, message="ok", raw_html="", record=RECORD),
+        spy=spy,
+    )
 
-    monkeypatch.setattr(cpf_route, "lookup_cpf", fake_lookup)
+    client.post(f"{BASE}/cpf", json={"cpf": "123.456.789-01", "birth_date": "01/01/1990"})
 
-    response = client.post(f"{BASE}/cpf", json={"cpf": "11111111111", "birth_date": "01011990"})
-
-    assert response.status_code == 503
-    assert "hCaptcha" in response.json()["detail"]
+    assert spy == {"cpf": "12345678901", "birth_date": "01011990"}
 
 
-def test_cpf_lookup_rejects_short_cpf(client):
+def test_cpf_not_found_is_404(client, monkeypatch):
+    patch_lookup(
+        monkeypatch,
+        result=CpfQueryResult(success=False, message="CPF nao consta na base", raw_html=""),
+    )
+
+    response = client.post(f"{BASE}/cpf", json=PAYLOAD)
+
+    assert response.status_code == 404
+    assert response.json()["detail"]["source"] == "Receita Federal"
+
+
+def test_wrong_birth_date_is_422(client, monkeypatch):
+    patch_lookup(
+        monkeypatch,
+        result=CpfQueryResult(success=False, message="Data de nascimento invalida", raw_html=""),
+    )
+
+    assert client.post(f"{BASE}/cpf", json=PAYLOAD).status_code == 422
+
+
+def test_unrecognized_source_response_is_502(client, monkeypatch):
+    patch_lookup(
+        monkeypatch,
+        result=CpfQueryResult(success=False, message="unrecognized response", raw_html=""),
+    )
+
+    assert client.post(f"{BASE}/cpf", json=PAYLOAD).status_code == 502
+
+
+def test_captcha_not_verified_is_502(client, monkeypatch):
+    patch_lookup(monkeypatch, error=CaptchaNotVerified("hCaptcha not verified"))
+
+    assert client.post(f"{BASE}/cpf", json=PAYLOAD).status_code == 502
+
+
+def test_captcha_rate_limited_is_503(client, monkeypatch):
+    patch_lookup(monkeypatch, error=CaptchaRateLimited("still rate limiting"))
+
+    assert client.post(f"{BASE}/cpf", json=PAYLOAD).status_code == 503
+
+
+def test_invalid_payload_uses_the_shared_error_shape(client):
     response = client.post(f"{BASE}/cpf", json={"cpf": "123", "birth_date": "01011990"})
+
     assert response.status_code == 422
-
-
-def test_masked_input_is_accepted(client, monkeypatch):
-    received = {}
-
-    async def fake_lookup(cpf, birth_date):
-        received["cpf"], received["birth_date"] = cpf, birth_date
-        return CpfQueryResult(success=False, message="ok", raw_html="")
-
-    monkeypatch.setattr(cpf_route, "lookup_cpf", fake_lookup)
-
-    response = client.post(
-        f"{BASE}/cpf", json={"cpf": "123.456.789-01", "birth_date": "01/01/1990"}
-    )
-
-    assert response.status_code == 200
-    assert received == {"cpf": "12345678901", "birth_date": "01011990"}
+    assert response.json() == {"detail": {"message": "Dados invalidos"}}
