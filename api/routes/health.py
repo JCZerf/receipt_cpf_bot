@@ -18,12 +18,13 @@ async def health() -> HealthResponse:
 
 
 async def _probe(client: httpx.AsyncClient, url: str) -> str:
+    # Um 404 significa que o servico respondeu: o solver so expoe o endpoint de
+    # reconhecimento, e a raiz dele nao existe. So erro de servidor ou de conexao e queda.
     try:
         response = await client.get(url, timeout=PROBE_TIMEOUT_SECONDS, follow_redirects=True)
-        response.raise_for_status()
     except httpx.HTTPError:
         return "down"
-    return "ok"
+    return "down" if response.status_code >= 500 else "ok"
 
 
 @router.get(

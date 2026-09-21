@@ -132,3 +132,26 @@ def test_invalid_payload_uses_the_shared_error_shape(client):
 
     assert response.status_code == 422
     assert response.json() == {"detail": {"message": "Dados invalidos"}}
+
+
+@pytest.mark.parametrize(
+    "status_code,expected",
+    [(200, "ok"), (404, "ok"), (401, "ok"), (500, "down"), (503, "down")],
+)
+def test_deep_health_counts_only_server_errors_as_down(status_code, expected, monkeypatch):
+    import httpx
+
+    from api.routes import health as health_route
+
+    async def fake_get(self, url, **kwargs):
+        return httpx.Response(status_code, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    async def run():
+        async with httpx.AsyncClient() as client:
+            return await health_route._probe(client, "https://example.com")
+
+    import asyncio
+
+    assert asyncio.run(run()) == expected
