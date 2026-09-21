@@ -15,8 +15,16 @@ UA_TEMPLATE = (
     "(KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36"
 )
 
-SCREEN = {"width": 1920, "height": 1080}
-VIEWPORT = {"width": 1912, "height": 949}
+# A janela precisa caber na tela: uma janela maior que o monitor nao acontece em uso real.
+# Estes sao os descontos da moldura do Chrome medidos no proprio navegador.
+WINDOW_BORDER = 8
+WINDOW_CHROME = 131
+
+SCREEN = {"width": settings.SCREEN_WIDTH, "height": settings.SCREEN_HEIGHT}
+VIEWPORT = {
+    "width": settings.SCREEN_WIDTH - WINDOW_BORDER,
+    "height": settings.SCREEN_HEIGHT - WINDOW_CHROME,
+}
 
 LOCALE = "pt-BR"
 TIMEZONE = "America/Sao_Paulo"

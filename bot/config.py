@@ -16,6 +16,10 @@ class BotSettings(BaseSettings):
     # Constantes calibradas em desktop rapido derrubam a consulta em container com pouca CPU,
     # onde o widget do hCaptcha leva bem mais tempo para renderizar.
     CAPTCHA_WAIT_SECONDS: float = 45.0
+    # O llvmpipe rasteriza na CPU, entao a area da tela vira tempo de processador: a 1920x1080
+    # uma consulta nao termina com meio nucleo, a 1280x720 termina.
+    SCREEN_WIDTH: int = 1280
+    SCREEN_HEIGHT: int = 720
 
 
 settings = BotSettings()

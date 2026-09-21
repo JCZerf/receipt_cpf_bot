@@ -11,6 +11,7 @@ from bot.browser.fingerprint import (
     parse_major_version,
 )
 from bot.browser.session import context_options
+from bot.config import settings
 
 
 def test_parse_major_version():
@@ -53,6 +54,10 @@ def test_browser_args_do_not_mutate_shared_list():
 def test_window_fits_inside_screen():
     assert VIEWPORT["width"] <= SCREEN["width"]
     assert VIEWPORT["height"] <= SCREEN["height"]
+
+
+def test_screen_follows_settings():
+    assert SCREEN == {"width": settings.SCREEN_WIDTH, "height": settings.SCREEN_HEIGHT}
 
 
 def test_context_options_headful_uses_real_window():
