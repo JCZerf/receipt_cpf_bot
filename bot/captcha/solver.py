@@ -15,6 +15,7 @@ from bot.browser.hcaptcha import (
     wait_for_ready_challenge,
 )
 from bot.captcha.client import recognize
+from bot.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,9 @@ async def _is_verified(checkbox_frame: Frame) -> bool:
 
 
 async def _wait_for_challenge_or_verification(
-    page: Page, checkbox_frame: Frame, timeout_ms: int = 20_000
+    page: Page, checkbox_frame: Frame, timeout_ms: int | None = None
 ) -> Frame | None:
+    timeout_ms = timeout_ms if timeout_ms is not None else int(settings.CAPTCHA_WAIT_SECONDS * 1000)
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
         if await _is_verified(checkbox_frame):

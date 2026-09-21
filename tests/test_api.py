@@ -78,3 +78,20 @@ def test_cpf_lookup_captcha_failure_returns_503(client, monkeypatch):
 def test_cpf_lookup_rejects_short_cpf(client):
     response = client.post(f"{BASE}/cpf", json={"cpf": "123", "birth_date": "01011990"})
     assert response.status_code == 422
+
+
+def test_masked_input_is_accepted(client, monkeypatch):
+    received = {}
+
+    async def fake_lookup(cpf, birth_date):
+        received["cpf"], received["birth_date"] = cpf, birth_date
+        return CpfQueryResult(success=False, message="ok", raw_html="")
+
+    monkeypatch.setattr(cpf_route, "lookup_cpf", fake_lookup)
+
+    response = client.post(
+        f"{BASE}/cpf", json={"cpf": "123.456.789-01", "birth_date": "01/01/1990"}
+    )
+
+    assert response.status_code == 200
+    assert received == {"cpf": "12345678901", "birth_date": "01011990"}

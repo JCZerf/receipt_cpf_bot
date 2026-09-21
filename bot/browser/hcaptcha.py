@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 from patchright.async_api import Frame, Page
 
+from bot.config import settings
+
 IMAGE_URL_PATTERN = re.compile(r'url\("([^"]+)"\)')
 MARGIN_TOP_PATTERN = re.compile(r"margin-top:\s*(-?[\d.]+)px")
 DIMENSIONS_PATTERN = re.compile(r"width:\s*([\d.]+)px;\s*height:\s*([\d.]+)px")
@@ -109,7 +111,8 @@ async def submit_challenge(frame: Frame) -> None:
     await frame.locator(".button-submit.button").click()
 
 
-async def wait_for_checkbox(page: Page, timeout_ms: int = 15_000) -> Frame:
+async def wait_for_checkbox(page: Page, timeout_ms: int | None = None) -> Frame:
+    timeout_ms = timeout_ms if timeout_ms is not None else int(settings.CAPTCHA_WAIT_SECONDS * 1000)
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
         frame = checkbox_frame(page)
@@ -132,7 +135,8 @@ async def _reference_sprite_stable(frame: Frame) -> SpriteFrame | None:
     return second
 
 
-async def wait_for_ready_challenge(page: Page, timeout_ms: int = 15_000) -> Frame:
+async def wait_for_ready_challenge(page: Page, timeout_ms: int | None = None) -> Frame:
+    timeout_ms = timeout_ms if timeout_ms is not None else int(settings.CAPTCHA_WAIT_SECONDS * 1000)
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
         frame = challenge_frame(page)
