@@ -54,6 +54,8 @@ cp .env.example .env
 | `SOLVER_PATH` | não | `/api/v1/recognition/hcaptcha` | Caminho do endpoint de reconhecimento |
 | `SOLVER_TIMEOUT_SECONDS` | não | `30` | Timeout de cada chamada ao solver |
 | `HEADLESS` | não | `true` | Roda o Chrome sem janela |
+| `CHROME_EXECUTABLE` | não | (canal `chrome` do sistema) | Caminho de um binário específico do Chrome |
+| `CHROME_PROFILE_DIR` | não | `.chrome-profile` | Diretório do perfil do Chrome |
 | `API_V1_STR` | não | `/api/v1` | Prefixo das rotas da API |
 | `PROJECT_NAME` | não | `receipt_cpf_bot` | Título exibido na documentação da API |
 
@@ -159,8 +161,45 @@ Os ajustes que sustentam isso estão em `bot/browser/fingerprint.py`:
 - `locale` pt-BR e fuso de São Paulo
 
 **Plataformas serverless (Vercel, Cloud Functions) não servem para o bot**: o limite de
-execução é menor que uma consulta com rate limit, não há display X nem Mesa, e o perfil do
-Chrome não sobrevive entre invocações. O solver, por ser stateless, roda bem nelas.
+execução é menor que uma consulta com rate limit, não há display X nem Mesa, e não há como
+instalar pacotes de sistema. O solver, por ser stateless, roda bem nelas.
+
+### A versão do Chrome importa
+
+O `Dockerfile` fixa o Chrome em uma versão exata (`CHROME_VERSION`, via Chrome for Testing),
+e isso não é preciosismo: com o Chrome 153 a Receita **rejeita** a consulta, com o 140 aceita,
+no mesmo container e com todo o resto idêntico. Uma diferença observável entre as duas é
+`navigator.deviceMemory`, que passa a reportar `32` no 153 — valor acima do teto de `8` que a
+especificação define e que nenhum navegador comum reporta.
+
+Instalar `google-chrome-stable` sem fixar versão faz o ambiente mudar sozinho a cada rebuild,
+com o bot deixando de funcionar sem nenhuma alteração de código. Ao atualizar a versão, rode
+uma consulta real antes de promover a imagem.
+
+### Docker
+
+```bash
+docker build -t receipt-cpf-bot .
+docker run --rm -p 8000:8000 --env-file .env receipt-cpf-bot
+```
+
+A imagem já sobe o Xvfb pelo entrypoint e respeita a `$PORT` (o Render a define
+automaticamente). O perfil do Chrome pode começar vazio, então **não é necessário disco
+persistente**.
+
+O recurso que limita é **CPU**, não memória — o llvmpipe rasteriza no processador. Medições de
+uma consulta real dentro do container:
+
+| CPU / RAM | Resultado |
+| --- | --- |
+| 0,1 / 512 MB | falha: o widget do hCaptcha não carrega a tempo |
+| 0,5 / 512 MB | ok, ~38s |
+| 1,0 / 2 GB | ok, ~29s |
+
+512 MB bastam; abaixo de meio núcleo, não.
+
+Em plataformas como Render ou Cloud Run, escolha o runtime **Docker**; ambientes de runtime
+nativo não permitem instalar Chrome, Xvfb e Mesa. Use `/api/v1/health` como health check path.
 
 ## Limites conhecidos
 
