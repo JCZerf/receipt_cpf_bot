@@ -33,6 +33,9 @@ core/    infraestrutura compartilhada pelas duas camadas
 A `api` nunca é importada pelo `bot`. O solver de captcha é um serviço externo, acessado por
 HTTP, então trocá-lo não exige mexer no bot.
 
+As decisões que sustentam esse desenho, com as medições que as produziram, estão em
+[docs/decisoes-tecnicas.md](docs/decisoes-tecnicas.md).
+
 ## Requisitos
 
 - Python 3.12+
